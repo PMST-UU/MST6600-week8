@@ -278,3 +278,4 @@ Cu_model_cc %>%
   theme_bw()
 ```
 
+Residuals are random.
