@@ -3,6 +3,9 @@ title: "Week 8 - process modeling"
 output: html_notebook
 ---
 
+# 
+
+
 # NIST Case Study - Load Cell Calibrarion
 
 ## Background & Data
@@ -279,3 +282,15 @@ Cu_model_cc %>%
 ```
 
 Residuals are random.
+
+```{r}
+Cu_model_cc %>% 
+  augment() %>%
+  ggplot() +
+  geom_point(aes(Temp, Cu)) +
+  geom_smooth(aes(Temp, Cu), method = "loess", colour = "blue", linetype = "dashed") +
+  ggtitle("Thermal Expansion of Copper Data", subtitle = "method = 'loess'") +
+  labs(x = "Temperature (K)", y = "Coefficient of Thermal Expansion") +
+  theme_bw()
+```
+
