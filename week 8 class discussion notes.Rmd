@@ -1,0 +1,280 @@
+---
+title: "Week 8 - process modeling"
+output: html_notebook
+---
+
+# NIST Case Study - Load Cell Calibrarion
+
+## Background & Data
+
+NIST Engineering Statistics Handbook
+Chapter 4: Process Modeling
+
+> The data collected in the calibration experiment consisted of a known load, applied to the load cell, and the corresponding deflection of the cell from its nominal position. Forty measurements were made over a range of loads from 150,000 to 3,000,000 units. The data were collected in two sets in order of increasing load. The systematic run order makes it difficult to determine whether or not there was any drift in the load cell or measuring equipment over time. Assuming there is no drift, however, the experiment should provide a good description of the relationship between the load applied to the cell and its response.
+
+```{r load data, echo=TRUE}
+library(tidyverse)
+
+load_cell <- read_table2(
+  "LoadCellCalibration.txt")
+load_cell
+
+```
+
+***
+
+## Selection of Inital Model
+
+First, let's view the data.
+
+```{r simple plot}
+ggplot(load_cell) +
+  geom_point(aes(Load, Deflection))
+```
+
+The data looks linear. We can use a simple linear model to view the data
+
+$$ y = mx + b $$
+
+```{r linear model}
+load_cell_model <- lm(Deflection ~ Load, load_cell)
+summary(load_cell_model)
+```
+Wow! an R-squared value of 1! it must be perfect.
+
+### A new package to work with summary information: broom()
+**broom** package is part of the tidyverse and inccludes `glance()`, `tidy`, and `augment()`.
+These functions create tidy data frames based on the model.
+
+```{r}
+library(broom)
+```
+
+```{r echo=TRUE}
+load_cell_glance <- glance(load_cell_model)
+load_cell_glance
+```
+
+```{r echo=TRUE}
+load_cell_tidy <- tidy(load_cell_model)
+load_cell_tidy
+```
+
+```{r}
+augment(load_cell_model)
+```
+
+```{r}
+ggplot(load_cell, aes(Load, Deflection)) +
+  geom_point() +
+  stat_smooth(method = lm, linetype = "dashed", colour = "blue", size = 0.5) +
+  ggtitle("NIST Load Cell Calibration Data", subtitle = "+/- 95% Confidence Intervals are not visible")
+```
+
+## But wait! What about the residuals?
+
+```{r}
+load_cell_resid = resid(load_cell_model)
+load_cell_resid
+
+# ggplot() +
+#   geom_point(aes(LoadCell$Load, LC.resid)) +
+#   geom_hline(aes(yintercept=0)) +
+#   geom_hline(aes(yintercept=+2*(summary(m.LC)$sigma)), linetype = "dashed") +
+#   geom_hline(aes(yintercept=-2*(summary(m.LC)$sigma)), linetype = "dashed") +
+#   ggtitle("Deflection Load Residuals", subtitle = "+/- 2(Residual Statndard Deviation)") +
+#   theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5))
+```
+
+Using the `augment()` function we can plot the residuals very easily
+
+```{r echo=TRUE}
+load_cell_fit <- augment(load_cell_model)
+load_cell_fit
+
+ggplot(load_cell_fit) +
+  geom_point(aes(Load, .resid)) +
+  ggtitle("Residuals from linear model of the load cell")
+```
+
+
+The residuals from a good model would be random. Although not necessary, we can plot a histogram or qqplot to demonstrate the residuals are not following a normal distribution.
+
+```{r}
+
+ggplot(load_cell_fit) +
+  geom_histogram(aes(.resid))
+
+ggplot(load_cell_fit) +
+  geom_qq(aes(sample = .resid))
+
+```
+
+*** 
+
+## Model Refinement
+
+$$ D = \beta_0 + \beta_1 L + \beta_2 L^2 + \varepsilon $$
+
+
+We can use the linear model function, `lm()`, by creating a new variable $L^2$. 
+
+```{r}
+load_cell_2 <- mutate(load_cell, Load_squared = Load^2)
+load_cell_2
+
+```
+
+
+```{r}
+load_cell_model_2 <- lm(Deflection ~ Load + Load_squared, load_cell_2)
+summary(load_cell_model_2)
+```
+
+```{r}
+load_cell_fit_2 <- augment(load_cell_model_2)
+load_cell_fit_2
+
+ggplot(load_cell_fit_2) +
+  geom_point(aes(Load, .resid)) +
+  ggtitle("Residuals from refined model of the load cell")
+```
+
+### Could we have used a non-linear least squares fit model?
+
+```{r}
+load_cell_model_3 <- nls(Deflection ~ b0 + b1*Load + b2*Load^2, load_cell_2, start = c(b0 = 0, b1 = 0,b2 = 0))
+
+summary(load_cell_model_3)
+
+```
+
+The results are identical.
+
+```{r}
+ggplot(load_cell_fit_2) +
+  geom_histogram(aes(.resid))
+
+ggplot(load_cell_fit_2) +
+  geom_qq(aes(sample = .resid))
+```
+
+***
+
+***
+
+## Progaming with `case_when()`
+
+Looking at the orginal data set, we can see that there are two sets of data. We might want to label these as "run1" and "run2." we could do this in Excel using an `IF()` function. In the **tidyverse**, we can use the `case_when()` function.
+
+```{r echo=TRUE}
+load_cell_fit_2
+
+load_cell_fit_2_runs <- load_cell_fit_2 %>%
+  mutate(
+    run = case_when(seq_along(Load) <= 20 ~ "run1", 
+                    seq_along(Load) > 20 ~ "run2"))
+
+load_cell_fit_2_runs
+```
+
+# EDA of load cell data by run
+```{r}
+
+ggplot(load_cell_fit_2_runs) +
+  geom_point(aes(Load, .resid, colour = run)) +
+  ggtitle("Residuals from refined model of the load cell") +
+  theme_bw()
+```
+
+***
+***
+
+# NIST Case Study - Thermal Expansion
+
+> This case study illustrates the use of a class of nonlinear models called rational function models. The data set used is the thermal expansion of copper related to temperature.
+
+>The response variable for this data set is the coefficient of thermal expansion for copper. The predictor variable is temperature in degrees kelvin. There were 236 data points collected. 
+
+
+```{r}
+CTECu <- read_table2(
+  "Coefficient of Thermal Expansion - Cu.txt")
+
+CTECu
+```
+
+```{r}
+ggplot(CTECu) +
+  geom_point(aes(Temp, Cu)) +
+  ggtitle("Thermal Expansion of Copper Data", subtitle = "NIST case study") +
+  labs(x = "Temperature (K)", y = "Coefficient of Thermal Expansion") +
+  theme_bw()
+```
+
+## Quadratic/Quadratic Rational Function Model
+
+$$ y = \frac{A_0 + A_1 x} {1 + B_1 x + B_2 x^2} $$
+
+```{r}
+Cu_model <- nls(Cu ~ ((a0 + a1*Temp + a2*Temp^2)/(1 + b1*Temp + b2*Temp^2)), 
+            CTECu, start = list(a0 = 0, a1 = -1, a2 = -1, b1 = 0, b2 = 0), trace = T)
+augment(Cu_model)
+summary(Cu_model)
+```
+
+
+```{r}
+Cu_model %>% 
+  augment() %>%
+  ggplot() +
+  geom_point(aes(Temp, Cu)) +
+  geom_line(aes(Temp, .fitted), colour = "blue", linetype = "dashed") +
+  ggtitle("Thermal Expansion of Copper Data", subtitle = "Quadratic/Quadratic Rational Functional Model") +
+  labs(x = "Temperature (K)", y = "Coefficient of Thermal Expansion") +
+  theme_bw()
+  
+```
+
+```{r}
+Cu_model %>% 
+  augment() %>%
+  ggplot() +
+  geom_point(aes(Temp, .resid))+
+  ggtitle("Residuals: Thermal Expansion of Copper Data", subtitle = "Quadratic/Quadratic Rational Functional Model") +
+  labs(x = "Temperature (K)", y = "Coefficient of Thermal Expansion") +
+  theme_bw()
+```
+
+>The full-sized residual plot clearly shows the distinct pattern in the residuals. When residuals exhibit a clear pattern, the corresponding errors are probably not random.
+
+
+```{r}
+Cu_model_cc <- nls(Cu ~ ((a0 + a1*Temp + a2*Temp^2 + a3*Temp^3)/(1 + b1*Temp + b2*Temp^2 + b3*Temp^3)), 
+            CTECu, start = list(a0 = 0, a1 = -1, a2 = -1, a3 = 0, b1 = 0, b2 = 0, b3 = 0), 
+            trace = T)
+augment(Cu_model_cc)
+summary(Cu_model_cc)
+```
+```{r}
+Cu_model_cc %>% 
+  augment() %>%
+  ggplot() +
+  geom_point(aes(Temp, Cu)) +
+  geom_line(aes(Temp, .fitted), colour = "blue", linetype = "dashed") +
+  ggtitle("Thermal Expansion of Copper Data", subtitle = "Cubic/Cubic Rational Functional Model") +
+  labs(x = "Temperature (K)", y = "Coefficient of Thermal Expansion") +
+  theme_bw()
+```
+
+
+```{r}
+Cu_model_cc %>% 
+  augment() %>%
+  ggplot() +
+  geom_point(aes(Temp, .resid))+
+  ggtitle("Residuals: Thermal Expansion of Copper Data", subtitle = "Cubic/Cubic Rational Functional Model") +
+  labs(x = "Temperature (K)", y = "Coefficient of Thermal Expansion") +
+  theme_bw()
+```
+
