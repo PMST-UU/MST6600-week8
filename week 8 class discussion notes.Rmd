@@ -3,9 +3,6 @@ title: "Week 8 - process modeling"
 output: html_notebook
 ---
 
-# 
-
-
 # NIST Case Study - Load Cell Calibrarion
 
 ## Background & Data

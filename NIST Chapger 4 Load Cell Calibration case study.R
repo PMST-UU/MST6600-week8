@@ -9,9 +9,9 @@ View(LoadCell)
 m.LC <- lm(Deflection ~ Load, LoadCell)
 summary(m.LC)
 
-Call:
-  lm(formula = Deflection ~ Load, data = LoadCell)
-
+#Call:
+#  lm(formula = Deflection ~ Load, data = LoadCell)
+#
 # Residuals:
 #   Min         1Q     Median         3Q        Max 
 # -0.0042751 -0.0016308  0.0005818  0.0018932  0.0024211 
